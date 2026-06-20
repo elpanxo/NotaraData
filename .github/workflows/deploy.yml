@@ -1,0 +1,108 @@
+# ============================================================
+# notara-data / .github/workflows/deploy.yml
+# Pipeline CI/CD — Infraestructura de datos
+#
+# Este repo NO construye imágenes Docker propias.
+# Solo aplica los manifiestos K8s con imágenes oficiales
+# (postgres, mongo, redis, rabbitmq) al cluster EKS.
+#
+# SECRETS requeridos en este repo:
+#   AWS_ACCESS_KEY_ID       → Credencial AWS Academy
+#   AWS_SECRET_ACCESS_KEY   → Credencial AWS Academy
+#   AWS_SESSION_TOKEN       → Token de sesión Academy (rota cada 4h)
+#   AWS_REGION              → us-east-1
+#   EKS_CLUSTER_NAME        → notara-cluster
+# ============================================================
+name: 🗄️ Deploy Data Layer to EKS
+
+on:
+  push:
+    branches: [deploy]
+    paths:
+      - "k8s/**"           # Solo se activa si cambia algo en k8s/
+  workflow_dispatch:        # También permite ejecución manual
+
+jobs:
+  deploy-data:
+    name: 🚀 Apply K8s manifests — notara-data
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Obtener el código del repo ──────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Autenticar con AWS Academy ──────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      # ── 3. Instalar kubectl ────────────────────────────────
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: v1.29.0
+
+      # ── 4. Conectar al cluster EKS ─────────────────────────
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ secrets.AWS_REGION }} \
+            --name   ${{ secrets.EKS_CLUSTER_NAME }}
+
+      # ── 5. Verificar conexión al cluster ───────────────────
+      - name: Verify cluster connection
+        run: |
+          echo "📡 Nodos disponibles:"
+          kubectl get nodes
+
+      # ── 6. Aplicar todos los manifiestos del namespace data ─
+      - name: Apply data layer manifests
+        run: |
+          echo "📦 Aplicando manifiestos de notara-data..."
+          kubectl apply -f k8s/manifests.yaml
+
+      # ── 7. Esperar que cada servicio esté listo ────────────
+      - name: Wait for deployments to be ready
+        run: |
+          echo "⏳ Esperando PostgreSQL usuarios..."
+          kubectl rollout status deployment/postgres-usuarios \
+            -n notara-data --timeout=120s
+
+          echo "⏳ Esperando PostgreSQL notas..."
+          kubectl rollout status deployment/postgres-notas \
+            -n notara-data --timeout=120s
+
+          echo "⏳ Esperando PostgreSQL pagos..."
+          kubectl rollout status deployment/postgres-pagos \
+            -n notara-data --timeout=120s
+
+          echo "⏳ Esperando PostgreSQL vocabulario..."
+          kubectl rollout status deployment/postgres-vocabulario \
+            -n notara-data --timeout=120s
+
+          echo "⏳ Esperando MongoDB..."
+          kubectl rollout status deployment/mongodb \
+            -n notara-data --timeout=120s
+
+          echo "⏳ Esperando Redis..."
+          kubectl rollout status deployment/redis \
+            -n notara-data --timeout=120s
+
+          echo "⏳ Esperando RabbitMQ..."
+          kubectl rollout status deployment/rabbitmq \
+            -n notara-data --timeout=180s
+
+      # ── 8. Estado final ────────────────────────────────────
+      - name: Show final status
+        run: |
+          echo ""
+          echo "✅ Estado final del namespace notara-data:"
+          kubectl get all -n notara-data
+          echo ""
+          echo "🌐 Services (DNS internos para el backend):"
+          kubectl get svc -n notara-data
