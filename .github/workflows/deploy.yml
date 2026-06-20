@@ -1,26 +1,11 @@
-# ============================================================
-# notara-data / .github/workflows/deploy.yml
-# Pipeline CI/CD — Infraestructura de datos
-#
-# Este repo NO construye imágenes Docker propias.
-# Solo aplica los manifiestos K8s con imágenes oficiales
-# (postgres, mongo, redis, rabbitmq) al cluster EKS.
-#
-# SECRETS requeridos en este repo:
-#   AWS_ACCESS_KEY_ID       → Credencial AWS Academy
-#   AWS_SECRET_ACCESS_KEY   → Credencial AWS Academy
-#   AWS_SESSION_TOKEN       → Token de sesión Academy (rota cada 4h)
-#   AWS_REGION              → us-east-1
-#   EKS_CLUSTER_NAME        → notara-cluster
-# ============================================================
 name: 🗄️ Deploy Data Layer to EKS
 
 on:
   push:
     branches: [deploy]
     paths:
-      - "k8s/**"           # Solo se activa si cambia algo en k8s/
-  workflow_dispatch:        # También permite ejecución manual
+      - "k8s/**" # Solo se activa si cambia algo en k8s/
+  workflow_dispatch: # También permite ejecución manual
 
 jobs:
   deploy-data:
@@ -36,10 +21,10 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region:            ${{ secrets.AWS_REGION }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       # ── 3. Instalar kubectl ────────────────────────────────
       - name: Install kubectl
