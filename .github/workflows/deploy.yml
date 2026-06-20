@@ -4,8 +4,8 @@ on:
   push:
     branches: [deploy]
     paths:
-      - "k8s/**" # Solo se activa si cambia algo en k8s/
-  workflow_dispatch: # También permite ejecución manual
+      - "k8s/**"
+  workflow_dispatch:
 
 jobs:
   deploy-data:
