@@ -65,38 +65,68 @@ jobs:
           kubectl apply -f k8s/manifests.yaml
 
       # ── 7. Esperar que cada servicio esté listo ────────────
+      # Nota: timeouts ampliados — en AWS Academy con instancias
+      # t3.medium compartidas, Mongo y RabbitMQ pueden tardar más
+      # en su primer arranque (creación de filesystem interno).
       - name: Wait for deployments to be ready
         run: |
           echo "⏳ Esperando PostgreSQL usuarios..."
           kubectl rollout status deployment/postgres-usuarios \
-            -n notara-data --timeout=120s
+            -n notara-data --timeout=150s
 
           echo "⏳ Esperando PostgreSQL notas..."
           kubectl rollout status deployment/postgres-notas \
-            -n notara-data --timeout=120s
+            -n notara-data --timeout=150s
 
           echo "⏳ Esperando PostgreSQL pagos..."
           kubectl rollout status deployment/postgres-pagos \
-            -n notara-data --timeout=120s
+            -n notara-data --timeout=150s
 
           echo "⏳ Esperando PostgreSQL vocabulario..."
           kubectl rollout status deployment/postgres-vocabulario \
-            -n notara-data --timeout=120s
+            -n notara-data --timeout=150s
 
           echo "⏳ Esperando MongoDB..."
           kubectl rollout status deployment/mongodb \
-            -n notara-data --timeout=120s
+            -n notara-data --timeout=300s
 
           echo "⏳ Esperando Redis..."
           kubectl rollout status deployment/redis \
-            -n notara-data --timeout=120s
+            -n notara-data --timeout=150s
 
           echo "⏳ Esperando RabbitMQ..."
           kubectl rollout status deployment/rabbitmq \
-            -n notara-data --timeout=180s
+            -n notara-data --timeout=300s
 
-      # ── 8. Estado final ────────────────────────────────────
+      # ── 8. Diagnóstico SOLO si el paso anterior falló ──────
+      # Esto te muestra directo en los logs de Actions qué pod
+      # quedó pegado y por qué, sin necesitar kubectl local.
+      - name: Diagnose failures (only if previous step failed)
+        if: failure()
+        run: |
+          echo "❌ Algo no llegó a estar listo a tiempo. Diagnóstico:"
+          echo ""
+          echo "📊 Estado de todos los pods:"
+          kubectl get pods -n notara-data -o wide
+          echo ""
+          echo "📋 Describe de pods que NO están Running/Ready:"
+          for pod in $(kubectl get pods -n notara-data --field-selector=status.phase!=Running -o jsonpath='{.items[*].metadata.name}'); do
+            echo "--- describe $pod ---"
+            kubectl describe pod "$pod" -n notara-data
+          done
+          echo ""
+          echo "📜 Últimos eventos del namespace:"
+          kubectl get events -n notara-data --sort-by='.lastTimestamp' | tail -30
+          echo ""
+          echo "📝 Logs de pods que podrían estar fallando:"
+          for pod in $(kubectl get pods -n notara-data -o jsonpath='{.items[*].metadata.name}'); do
+            echo "--- logs $pod ---"
+            kubectl logs "$pod" -n notara-data --tail=50 || echo "(sin logs disponibles aún)"
+          done
+
+      # ── 9. Estado final ────────────────────────────────────
       - name: Show final status
+        if: success()
         run: |
           echo ""
           echo "✅ Estado final del namespace notara-data:"
